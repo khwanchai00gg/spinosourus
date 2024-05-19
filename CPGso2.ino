@@ -27,15 +27,15 @@ float alpha = 1.6;
 float* ptr_alpha = &alpha;
 float phi = PI / 12;
 float* ptr_phi = &phi;
-float mi = 0.05;
+float mi = 0.00;
 float* ptr_mi = &mi;
 
 // Hormone
 float beta = 0.01;
 float* ptr_beta = &beta;
-float alphah = 0.01;
+float alphah = 0.3;
 float* ptr_alphah = &alphah;
-float gramma = 0.01;
+float gramma = 0.5;
 float* ptr_gramma = &gramma;
 
 float hc = 1;
@@ -54,7 +54,7 @@ float wso0so0 = *ptr_alpha * cos(*ptr_phi);
 float* ptr_wso0so0 = &wso0so0;
 float wso1so1 = *ptr_alpha * cos(*ptr_phi);
 float* ptr_wso1so1 = &wso1so1;
-float wso1so0 = (*ptr_alpha * -sin(*ptr_phi - *ptr_mi));
+float wso1so0 = (*ptr_alpha * -sin(*ptr_phi + *ptr_mi));
 float* ptr_wso1so0 = &wso1so0;
 // float wso0so1 = 0.4;
 // float* ptr_wso0so1 = &wso0so1;
@@ -323,10 +323,10 @@ float* ptr_m12o = &m12o;
 //^^^^^^^^^^^^ motor ^^^^^^^^^^^^^^^^^^
 
 // servo
-float stiffness = 1.5;
-float damping = 0.0;
+float stiffness = 2.0;
+float damping = 0.05;
 float torque[4];
-float range[] = { 500, 700, 300, 500 };
+float range[] = { 500, 625, 375, 500 };
 //^^^^^^^^^^^^ servo ^^^^^^^^^^^^^^^^^^
 
 const long interval = 10;
@@ -341,12 +341,17 @@ float my_map(float x, float in_min, float in_max, float out_min, float out_max) 
 }
 
 void hormone() {
-  *ptr_hg = 0.01 * ((abs(sc.ReadLoad(1)) + abs(sc.ReadLoad(2)) + abs(sc.ReadLoad(3)) + abs(sc.ReadLoad(4)) + abs(sc.ReadLoad(5)) + abs(sc.ReadLoad(6)) + abs(sc.ReadLoad(7)) + abs(sc.ReadLoad(8)) + abs(sc.ReadLoad(9)) + abs(sc.ReadLoad(11)) + abs(sc.ReadLoad(12))) / 11);
+  *ptr_hg = -0.5 * (((abs(sc.ReadLoad(1)) + abs(sc.ReadLoad(2)) + abs(sc.ReadLoad(3)) + abs(sc.ReadLoad(4)) + abs(sc.ReadLoad(5)) + abs(sc.ReadLoad(6)) + abs(sc.ReadLoad(7)) + abs(sc.ReadLoad(8)) + abs(sc.ReadLoad(9)) + abs(sc.ReadLoad(11)) + abs(sc.ReadLoad(12))) / 11) + 1);
   *ptr_hr = *ptr_gramma * 1;
   *ptr_hc = *ptr_beta * *ptr_hc + *ptr_alphah * *ptr_hg - *ptr_hr;
+  *ptr_mi = (0.17 * *ptr_hc) + 0.05;
+  *ptr_mi = (*ptr_mi < -0.11) ? *ptr_mi = -0.11 : (*ptr_mi > 0.05) ? *ptr_mi = 0.05 : *ptr_mi;
 }
 
 void leg_cpg() {
+  // mi
+  *ptr_wso0so1 = (*ptr_alpha * sin(*ptr_phi + *ptr_mi));
+  *ptr_wso1so0 = (*ptr_alpha * -sin(*ptr_phi + *ptr_mi));
   // so2
   *ptr_so0o = tanh(*ptr_so0c);
   *ptr_so1o = tanh(*ptr_so1c);
@@ -396,8 +401,6 @@ void leg_cpg() {
   *ptr_vrn13c = (*ptr_wmrc1vrn13 * *ptr_mrc1o) + (*ptr_wso0vrn13 * *ptr_so1o) + *ptr_bias;
   *ptr_vrn14c = (*ptr_wvrn10vrn14 * *ptr_vrn10o) + (*ptr_wvrn11vrn14 * *ptr_vrn11o) + (*ptr_wvrn12vrn14 * *ptr_vrn12o) + (*ptr_wvrn13vrn14 * *ptr_vrn13o);
   // so2
-  *ptr_wso0so1 = (*ptr_alpha * sin(*ptr_phi + *ptr_mi));
-  *ptr_wso1so0 = (*ptr_alpha * -sin(*ptr_phi - *ptr_mi));
   *ptr_so0c = (*ptr_wso1so0 * *ptr_so1o) + (*ptr_wso0so0 * *ptr_so0o);
   *ptr_so1c = (*ptr_wso0so1 * *ptr_so0o) + (*ptr_wso1so1 * *ptr_so1o);
   // mrc
@@ -470,16 +473,37 @@ void onMqttMessage(int messageSize) {
         Serial.println("Not recived damping");
       }
       if (doc["range"]) {
-        auto range = doc["range"];
-        Serial.println("range: [" + String(range[0]) +" "+ String(range[1]) +" "+ String(range[2]) +" "+ String(range[3]) +"]");
+        range[0] = doc["range"][0];
+        range[1] = doc["range"][1];
+        range[2] = doc["range"][2];
+        range[3] = doc["range"][3];
+        Serial.println("range: [" + String(range[0]) + " " + String(range[1]) + " " + String(range[2]) + " " + String(range[3]) + "]");
       } else {
         Serial.println("Not recived range");
       }
       if (doc["mi"]) {
         *ptr_mi = doc["mi"].as<float>();
-        Serial.println("mi: " + String(mi));
+        Serial.println("mi: " + String(*ptr_mi));
       } else {
         Serial.println("Not recived mi");
+      }
+      if (doc["beta"]) {
+        *ptr_beta = doc["beta"].as<float>();
+        Serial.println("beta: " + String(*ptr_beta));
+      } else {
+        Serial.println("Not recived beta");
+      }
+      if (doc["alphah"]) {
+        *ptr_alphah = doc["alphah"].as<float>();
+        Serial.println("alphah: " + String(*ptr_alphah));
+      } else {
+        Serial.println("Not recived alphah");
+      }
+      if (doc["gramma"]) {
+        *ptr_gramma = doc["gramma"].as<float>();
+        Serial.println("gramma: " + String(*ptr_gramma));
+      } else {
+        Serial.println("Not recived gramma");
       }
     }
   }
@@ -501,6 +525,18 @@ void reconnectWiFi() {
     Serial.println("WiFi reconnected");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+
+    if (!mqttClient.connect(broker, port)) {
+      Serial.print("MQTT connection failed! Error code = ");
+      Serial.println(mqttClient.connectError());
+
+      // while (1) {
+      //   delay(1000);
+      // }
+    }
+
+    Serial.println("You're connected to the MQTT broker!");
+    Serial.println();
   }
 }
 
@@ -509,21 +545,24 @@ void setup() {
   Serial1.begin(1000000);
   sc.pSerial = &Serial1;
   // sc.WritePos(0xfe, 500, 1000);
-  sc.WritePos(4, 500, 1000);
-  sc.WritePos(5, 500, 1000);
-  sc.WritePos(9, 500, 1000);
-  sc.WritePos(3, 500, 1000);
+  // sc.WritePos(4, 500, 1000);
+  // sc.WritePos(5, 500, 1000);
+  // sc.WritePos(9, 500, 1000);
+  // sc.WritePos(3, 500, 1000);
 
-  sc.WritePos(11, 500, 1000);
-  sc.WritePos(2, 600, 1000);
-  sc.WritePos(1, 500, 1000);
-  sc.WritePos(8, 500, 1000);
-  sc.WritePos(7, 650, 1000);
+  // sc.WritePos(11, 500, 1000);
+  // sc.WritePos(2, 600, 1000);
+  // sc.WritePos(1, 500, 1000);
+  // sc.WritePos(8, 500, 1000);
+  // sc.WritePos(7, 650, 1000);
 
-  sc.WritePos(6, 0, 1000);
-  sc.WritePos(12, 1000, 1000);
-  sc.EnableTorque(0xfe, 0);
+  // sc.WritePos(6, 0, 1000);
+  // sc.WritePos(12, 1000, 1000);
+  sc.EnableTorque(0xfe, 1);
   delay(1000);
+
+  pinMode(6, OUTPUT);
+  digitalWrite(6, HIGH);
 
   // MQTT
   // attempt to connect to WiFi network:
@@ -555,9 +594,9 @@ void setup() {
     Serial.print("MQTT connection failed! Error code = ");
     Serial.println(mqttClient.connectError());
 
-    while (1) {
-      delay(1000);
-    }
+    // while (1) {
+    //   delay(1000);
+    // }
   }
 
   Serial.println("You're connected to the MQTT broker!");
@@ -654,7 +693,7 @@ void loop() {
         int Pos[MAX_CID];
         int Speed[MAX_CID];
         int Load[MAX_CID];
-        static unsigned char sInc[MAX_CID];
+        // static unsigned char sInc[MAX_CID];
         // static unsigned char cID = 0;
 
         // if (cID < MAX_CID) {
@@ -695,17 +734,24 @@ void loop() {
       sc.WritePos(7, my_map(*ptr_m7o, -0.94, 0.94, 575, 725), *ptr_interval);
     } else if (mode == 't') {
       sc.EnableTorque(0xfe, 1);
+    } else if (mode == 'c') {
+      Serial.println(String(sc.ReadLoad(1)) + " " + String(sc.ReadLoad(2)) + " " + String(sc.ReadLoad(3)) + " " + String(sc.ReadLoad(4)) + " " + String(sc.ReadLoad(5)) + " " + String(sc.ReadLoad(6)) + " " + String(sc.ReadLoad(7)) + " " + String(sc.ReadLoad(8)) + " " + String(sc.ReadLoad(9)) + " " + String(sc.ReadLoad(11)) + " " + String(sc.ReadLoad(12)));
     } else {
       sc.EnableTorque(0xfe, 0);
     }
 
-    Serial.println(String(*ptr_so0o) + " " + String(*ptr_so1o) + " " + String(*ptr_m9o) + " " + String(*ptr_m1o) + " " + String(*ptr_m4o) + " " + String(*ptr_m5o));
+    // Serial.println(String(*ptr_so0o) + " " + String(*ptr_so1o) + " " + String(*ptr_m9o) + " " + String(*ptr_m1o) + " " + String(*ptr_m4o) + " " + String(*ptr_m5o));
     // Serial.println(String(*ptr_so0o) + " " + String(*ptr_so1o) + " " + String(*ptr_m9o) + " " + String(*ptr_m1o) + " " + String(*ptr_m4o) + " " + String(*ptr_m5o));
     // Serial.println(String(*ptr_so1o) + " " + String(*ptr_so0o) + " " + String(*ptr_vrn14o) + " " + String(*ptr_vrn04o));
     // Serial.println(String(*ptr_m11o) + " " + String(*ptr_m2o) + " " + String(*ptr_m1o) + " " + String(*ptr_m8o) + " " + String(*ptr_m7o));
     // Serial.println(String(sc.ReadLoad(1)) + " " + String(sc.ReadLoad(2)) + " " + String(sc.ReadLoad(3)) + " " + String(sc.ReadLoad(4)) + " " + String(sc.ReadLoad(5)) + " " + String(sc.ReadLoad(6)) + " " + String(sc.ReadLoad(7)) + " " + String(sc.ReadLoad(8)) + " " + String(sc.ReadLoad(9)) + " " + String(sc.ReadLoad(11)) + " " + String(sc.ReadLoad(12)));
     // Serial.println(String(abs(sc.ReadLoad(1)) + abs(sc.ReadLoad(2)) + abs(sc.ReadLoad(3)) + abs(sc.ReadLoad(4)) + abs(sc.ReadLoad(5)) + abs(sc.ReadLoad(6)) + abs(sc.ReadLoad(7)) + abs(sc.ReadLoad(8)) + abs(sc.ReadLoad(9)) + abs(sc.ReadLoad(11)) + abs(sc.ReadLoad(12))));
     // Serial.println(String(*ptr_hg) + " " + String(*ptr_hr) + " " + String((0.17 * *ptr_hc) + 0.02));
+    Serial.println(String(*ptr_mi) + " " + String(*ptr_hc) + " " + String(*ptr_hg) + " " + String(*ptr_so0o));
+    String payload = String("{\"mode\":\""+String(mode)+"\",\"mi\":"+String(*ptr_mi)+"}");
+    mqttClient.beginMessage(outTopic, payload.length(), false, 0, false);
+    mqttClient.print(payload);
+    mqttClient.endMessage();
   }
 
   if (Serial.available() > 0) {
